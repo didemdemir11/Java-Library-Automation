@@ -35,4 +35,20 @@ public class Invoice extends BaseEntity{
     public void markAsPaid() {
         this.isPaid = true;
     }
+
+    public void setLoan(Loan loan) {
+        this.loan = loan;
+    }
+
+    public void setAmount(double amount) {
+        this.amount = amount;
+    }
+
+    public void setIssueDate(LocalDate issueDate) {
+        this.issueDate = issueDate;
+    }
+
+    public void setPaid(boolean paid) {
+        isPaid = paid;
+    }
 }

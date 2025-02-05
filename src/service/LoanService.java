@@ -4,6 +4,11 @@ import entity.Book;
 import entity.Invoice;
 import entity.Loan;
 import entity.Reader;
+import exception.BookAlreadyLoanedException;
+import exception.InvalidInputException;
+import exception.MaxLoanLimitExceededException;
+import exception.ReaderNotFoundException;
+import repository.LoanRepository;
 
 
 import java.time.LocalDate;
@@ -11,29 +16,33 @@ import java.time.LocalDate;
 import java.util.*;
 
 public class LoanService {
-    private final List<Loan> loans;
-    private final List<LoanRecord> loanRecords;
-    private final List<Reader> readers;
-    public LoanService() {
-        this.loans = new ArrayList<>();
-        this.loanRecords = new ArrayList<>();
-        this.readers = new ArrayList<>();
+    private final LoanRepository loanRepository;
+    private final InvoiceService invoiceService;
+
+    public LoanService(LoanRepository loanRepository, InvoiceService invoiceService) {
+        this.loanRepository = loanRepository;
+        this.invoiceService = invoiceService;
     }
 
-    public void borrowBook(Scanner scanner, Reader reader, Book book, InvoiceService invoiceService) {
+    public void borrowBook(Scanner scanner, Reader reader, Book book) {
         if (reader.getBorrowedBooks().size() >= 5) {
-            System.out.println("Hata: Kullanıcı en fazla 5 kitap ödünç alabilir.");
-            return;
+            throw new MaxLoanLimitExceededException("Hata: Kullanıcı en fazla 5 kitap ödünç alabilir.");
         }
 
         if (!book.getStatus().equalsIgnoreCase("Mevcut")) {
-            System.out.println("Hata: Kitap şu anda başka bir kullanıcı tarafından ödünç alınmış.");
-            return;
+            throw new BookAlreadyLoanedException("Hata: Kitap şu anda başka bir kullanıcı tarafından ödünç alınmış.");
         }
 
         System.out.print("Kaç gün ödünç almak istiyorsunuz? (Maksimum 15 gün): ");
-        int days = scanner.nextInt();
-        scanner.nextLine();
+        int days;
+        try {
+            days = scanner.nextInt();
+            scanner.nextLine();
+        } catch (Exception e) {
+            scanner.nextLine();
+            throw new InvalidInputException("Hata: Geçerli bir gün sayısı girin.");
+        }
+
         if (days > 15) {
             System.out.println("Hata: Maksimum ödünç alma süresi 15 gündür.");
             return;
@@ -41,22 +50,29 @@ public class LoanService {
 
         LocalDate borrowDate = LocalDate.now();
         LocalDate returnDate = borrowDate.plusDays(days);
-        Loan loan = new Loan(reader, book, borrowDate, returnDate,false,null);
-        loan.setInvoice(new Invoice(loan, Math.min(days, 15) * 5.0, LocalDate.now(), false));
-        loans.add(loan);
+        Loan loan = new Loan(reader, book, borrowDate, returnDate, false, null);
+
+        // Fatura oluştur
+        Invoice invoice = new Invoice(loan, days * 5.0, borrowDate, false);
+        loan.setInvoice(invoice);
+
+        // Loan'ı repo'ya ekle
+        loanRepository.saveLoan(loan);
         book.setStatus("Ödünç Alındı");
         reader.getBorrowedBooks().add(book);
-        loanRecords.add(new LoanRecord(reader, book, borrowDate, returnDate));
 
+        // LoanRecord ekle
+        LoanRecord loanRecord = new LoanRecord(reader, book, borrowDate, returnDate);
+        loanRepository.saveLoanRecord(loanRecord);
+
+        // Faturayı işleme al
         invoiceService.generateInvoice(scanner, loan);
 
         System.out.println("Kitap ödünç alındı: " + book.getTitle() + " - Teslim tarihi: " + returnDate);
     }
 
-    public void returnBook(Scanner scanner, Reader reader, Book book, InvoiceService invoiceService) {
-        Optional<Loan> loanOpt = loans.stream()
-                .filter(loan -> loan.getBook().equals(book) && loan.getReader().equals(reader))
-                .findFirst();
+    public void returnBook(Scanner scanner, Reader reader, Book book) {
+        Optional<Loan> loanOpt = loanRepository.findLoanByBookAndReader(book, reader);
 
         if (loanOpt.isEmpty()) {
             System.out.println("Hata: Bu kitap bu kullanıcı tarafından ödünç alınmamış.");
@@ -66,50 +82,58 @@ public class LoanService {
         Loan loan = loanOpt.get();
         LocalDate today = LocalDate.now();
         long overdueDays = today.isAfter(loan.getReturnDate()) ? today.toEpochDay() - loan.getReturnDate().toEpochDay() : 0;
-        double penalty = overdueDays * 10;
 
         if (overdueDays > 0) {
+            double penalty = overdueDays * 10;
             System.out.println("Gecikme süresi: " + overdueDays + " gün. Cezanız: " + penalty + " TL");
+
+            // Fatura güncelleniyor
+            loan.getInvoice().setAmount(loan.getInvoice().getAmount() + penalty);
+            loan.getInvoice().setPaid(false); // Fatura tekrar ödenmeyi bekleyecek
+            invoiceService.updateInvoice(loan.getInvoice());
         } else {
             invoiceService.refundInvoice(scanner, loan);
         }
 
         book.setStatus("Mevcut");
         reader.getBorrowedBooks().remove(book);
-        loans.remove(loan);
+        loanRepository.deleteLoan(loan);
         System.out.println("Kitap başarıyla iade edildi: " + book.getTitle());
     }
 
     public void listLoanRecords() {
-        if (loanRecords.isEmpty()) {
-            System.out.println("Henüz ödünç alınmış bir kitap yok.");
-        } else {
-            loanRecords.forEach(System.out::println);
-        }
+        loanRepository.findAllLoanRecords().forEach(System.out::println);
     }
-    public Optional<Loan> getLoanByBookId(long bookId) {
-        return loans.stream()
-                .filter(loan -> loan.getBook().getId() == bookId)
-                .findFirst();
-    }
-    public Optional<Reader> getReaderByEmail(String email) {
 
-        return readers.stream()
-                .filter(reader -> reader.getEmail().equalsIgnoreCase(email))
-                .findFirst();
-    }
-    public void addReader(Reader reader) {
-        readers.add(reader);
-    }
+
+
+
     public void listBorrowedBooks(Reader reader) {
-        List<Book> borrowedBooks = reader.getBorrowedBooks();
-        if (borrowedBooks.isEmpty()) {
+        List<Loan> borrowedLoans = loanRepository.findLoansByReader(reader);
+        if (borrowedLoans.isEmpty()) {
             System.out.println("Üzerinizde iade edilmesi gereken kitap bulunmamaktadır.");
         } else {
             System.out.println("İade edilmesi gereken kitaplar:");
-            borrowedBooks.forEach(book ->
-                    System.out.println("ID: " + book.getId() + " - " + book.getTitle() + " (Teslim tarihi: " + getLoanByBookId(book.getId()).map(Loan::getReturnDate).orElse(null) + ")")
-            );
+            borrowedLoans.forEach(loan -> {
+                System.out.println("ID: " + loan.getBook().getId() +
+                        " - " + loan.getBook().getTitle() +
+                        " (Teslim tarihi: " + loan.getReturnDate() + ")");
+            });
+        }
+    }
+
+    public Optional<Loan> getLoanByBookId(long bookId) {
+        return loanRepository.findLoanByBookId(bookId);
+    }
+    public Optional<Reader> getReaderByEmail(String email) {
+        return loanRepository.findReaderByEmail(email);
+    }
+    public void addReader(Reader reader) {
+        if (loanRepository.findReaderByEmail(reader.getEmail()).isEmpty()) {
+            loanRepository.saveReader(reader);
+            System.out.println("Yeni okuyucu kaydedildi: " + reader.getFullName());
+        } else {
+            System.out.println("Okuyucu zaten kayıtlı: " + reader.getFullName());
         }
     }
 }

@@ -2,104 +2,127 @@ package service;
 
 import entity.Book;
 import entity.Librarian;
+import exception.BookNotFoundException;
+import exception.GlobalExceptionHandler;
+import exception.InvalidInputException;
+import exception.UnauthorizedActionException;
+import repository.BookRepository;
 
 import java.util.*;
 
 public class BookService {
-    private final Map<Long, Book> books;
 
-    public BookService() {
-        this.books = new HashMap<>();
+    private final BookRepository bookRepository;
+
+    public BookService(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
+    }
+    public void save(Book book) {
+        bookRepository.save(book);
     }
 
     public void addBookFromInput(Scanner scanner) {
-        System.out.print("Kitap Adı: ");
-        String title = scanner.nextLine().trim();
-
-        System.out.print("Yazar: ");
-        String author = scanner.nextLine().trim();
-
-        System.out.print("Kategori: ");
-        String category = scanner.nextLine().trim();
-
-        System.out.print("Fiyat: ");
-        double price = 0;
         try {
-            price = Double.parseDouble(scanner.nextLine().trim());
-        } catch (NumberFormatException e) {
-            System.out.println("Hatalı fiyat girişi. Kitap eklenemedi.");
-            return;
+            System.out.print("Kitap Adı: ");
+            String title = scanner.nextLine().trim();
+
+            System.out.print("Yazar: ");
+            String author = scanner.nextLine().trim();
+
+            System.out.print("Kategori: ");
+            String category = scanner.nextLine().trim();
+
+            System.out.print("Fiyat: ");
+            double price;
+            try {
+                price = Double.parseDouble(scanner.nextLine().trim());
+                if (price <= 0) throw new InvalidInputException("Fiyat 0'dan büyük olmalıdır.");
+            } catch (NumberFormatException e) {
+                throw new InvalidInputException("Hatalı fiyat girişi.");
+            }
+
+            System.out.print("Baskı Bilgisi: ");
+            String edition = scanner.nextLine().trim();
+
+            Book book = new Book(title, author, category, price, "Mevcut", edition);
+            bookRepository.save(book);
+            System.out.println(book.getTitle() + " adlı kitap eklendi. ID: " + book.getId());
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
-
-        System.out.print("Baskı Bilgisi: ");
-        String edition = scanner.nextLine().trim();
-
-        Book book = new Book(title, author, category, price, "Mevcut", edition);
-        books.put(book.getId(), book);
-        System.out.println(book.getTitle() + " adlı kitap eklendi. ID: " + book.getId());
     }
 
     public void getBookByIdFromInput(Scanner scanner) {
-        System.out.print("Kitap ID girin: ");
         try {
+            System.out.print("Kitap ID girin: ");
             long id = scanner.nextLong();
-            scanner.nextLine(); // Buffer temizleme
-            books.getOrDefault(id, null);
-            System.out.println(books.containsKey(id) ? books.get(id) : "Hata: Kitap bulunamadı.");
-        } catch (InputMismatchException e) {
-            System.out.println("Hatalı giriş! Sayısal bir ID girin.");
             scanner.nextLine();
+            bookRepository.findById(id)
+                    .ifPresentOrElse(System.out::println, () -> {
+                        throw new BookNotFoundException("Hata: Kitap bulunamadı.");
+                    });
+        } catch (InputMismatchException e) {
+            scanner.nextLine();
+            throw new InvalidInputException("Hatalı giriş! Sayısal bir ID girin.");
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
     }
     public void getBooksByAuthorFromInput(Scanner scanner) {
-        System.out.print("Yazar adını girin: ");
-        String author = scanner.nextLine().trim();
-        List<Book> filteredBooks = books.values().stream()
-                .filter(book -> book.getAuthor().equalsIgnoreCase(author))
-                .toList();
-        if (filteredBooks.isEmpty()) {
-            System.out.println("Hata: Bu yazara ait kitap bulunamadı.");
-        } else {
-            filteredBooks.forEach(System.out::println);
+        try {
+            System.out.print("Yazar adını girin: ");
+            String author = scanner.nextLine().trim();
+            List<Book> filteredBooks = bookRepository.findByAuthor(author);
+            if (filteredBooks.isEmpty()) {
+                throw new BookNotFoundException("Bu yazara ait kitap bulunamadı.");
+            } else {
+                filteredBooks.forEach(System.out::println);
+            }
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
     }
 
     public void getBooksByCategoryFromInput(Scanner scanner) {
-        System.out.print("Kategori adını girin: ");
-        String category = scanner.nextLine().trim();
-        List<Book> filteredBooks = books.values().stream()
-                .filter(book -> book.getCategory().equalsIgnoreCase(category))
-                .toList();
-        if (filteredBooks.isEmpty()) {
-            System.out.println("Hata: Bu kategoriye ait kitap bulunamadı.");
-        } else {
-            filteredBooks.forEach(System.out::println);
+        try {
+            System.out.print("Kategori adını girin: ");
+            String category = scanner.nextLine().trim();
+            List<Book> filteredBooks = bookRepository.findByCategory(category);
+            if (filteredBooks.isEmpty()) {
+                throw new BookNotFoundException("Bu kategoriye ait kitap bulunamadı.");
+            } else {
+                filteredBooks.forEach(System.out::println);
+            }
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
     }
+
     public void listAllBooks() {
-        if (books.isEmpty()) {
-            System.out.println("Kütüphanede kitap bulunmamaktadır.");
-        } else {
-            books.values().forEach(book -> System.out.println(book.getId() + " - " + book.getTitle() + " - " + book.getStatus()));
+        try {
+            List<Book> books = bookRepository.findAll();
+            if (books.isEmpty()) {
+                System.out.println("Kütüphanede kitap bulunmamaktadır.");
+            } else {
+                books.forEach(book -> System.out.println(book.getId() + " - " + book.getTitle() + " - " + book.getStatus()));
+            }
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
     }
     public void updateBookDetailsFromInput(Scanner scanner, Librarian librarian) {
-        if (librarian == null) {
-            System.out.println("Yetkisiz işlem: Sadece kütüphane görevlileri kitap bilgilerini güncelleyebilir.");
-            return;
-        }
-
-        System.out.print("Güncellenecek kitabın ID'sini girin: ");
         try {
+            if (librarian == null) {
+                throw new UnauthorizedActionException("Yetkisiz işlem: Sadece kütüphane görevlileri kitap bilgilerini güncelleyebilir.");
+            }
+
+            System.out.print("Güncellenecek kitabın ID'sini girin: ");
             long id = scanner.nextLong();
             scanner.nextLine(); // Buffer temizleme
 
-            if (!books.containsKey(id)) {
-                System.out.println("Hata: Belirtilen ID'ye sahip kitap bulunamadı.");
-                return;
-            }
+            Book book = bookRepository.findById(id)
+                    .orElseThrow(() -> new BookNotFoundException("Belirtilen ID'ye sahip kitap bulunamadı."));
 
-            Book book = books.get(id);
             System.out.println("Mevcut Kitap Bilgileri: " + book);
             System.out.println("Güncellemek istemediğiniz alanları boş bırakabilirsiniz.");
 
@@ -120,9 +143,13 @@ public class BookService {
             if (!priceInput.isEmpty()) {
                 try {
                     double newPrice = Double.parseDouble(priceInput);
-                    if (newPrice > 0) book.setPrice(newPrice);
+                    if (newPrice > 0) {
+                        book.setPrice(newPrice);
+                    } else {
+                        throw new InvalidInputException("Hata: Fiyat 0'dan büyük olmalıdır.");
+                    }
                 } catch (NumberFormatException e) {
-                    System.out.println("Geçersiz fiyat girdisi. Güncelleme yapılmadı.");
+                    throw new InvalidInputException("Geçersiz fiyat girdisi. Lütfen geçerli bir sayı girin.");
                 }
             }
 
@@ -130,62 +157,45 @@ public class BookService {
             String newStatus = scanner.nextLine().trim();
             if (!newStatus.isEmpty()) book.setStatus(newStatus);
 
-            System.out.println("Kitap bilgileri güncellendi: " + book);
-        } catch (InputMismatchException e) {
-            System.out.println("Hata: Geçersiz giriş! Lütfen sayısal bir ID girin.");
-            scanner.nextLine(); // Hatalı girdiyi temizleme
+            bookRepository.update(book);
+            System.out.println("Kitap bilgileri başarıyla güncellendi: " + book);
+
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
     }
 
     public void removeBookFromInput(Scanner scanner, Librarian librarian) {
-        if (librarian == null) {
-            System.out.println("Yetkisiz işlem: Sadece kütüphane görevlileri kitap silebilir.");
-            return;
-        }
-
-        System.out.print("Silinecek kitabın ID'sini girin: ");
         try {
+            if (librarian == null) {
+                throw new UnauthorizedActionException("Yetkisiz işlem: Sadece kütüphane görevlileri kitap silebilir.");
+            }
+
+            System.out.print("Silinecek kitabın ID'sini girin: ");
             long id = scanner.nextLong();
             scanner.nextLine();
-            if (books.containsKey(id)) {
-                books.remove(id);
-                System.out.println("Kitap başarıyla silindi.");
-            } else {
-                System.out.println("Hata: Belirtilen ID'ye sahip kitap bulunamadı.");
-            }
-        } catch (InputMismatchException e) {
-            System.out.println("Hata: Geçersiz giriş! Sayısal bir ID girin.");
-            scanner.nextLine();
+            bookRepository.findById(id)
+                    .ifPresentOrElse(
+                            book -> {
+                                bookRepository.deleteById(id);
+                                System.out.println("Kitap başarıyla silindi.");
+                            },
+                            () -> {
+                                throw new BookNotFoundException("Belirtilen ID'ye sahip kitap bulunamadı.");
+                            }
+                    );
+        } catch (Exception e) {
+            GlobalExceptionHandler.handleException(e);
         }
-    }
-    public Optional<Book> getBookById(long id) {
-        return Optional.ofNullable(books.get(id));
-    }
-    public Optional<List<Book>> getBooksByAuthor(String author) {
-        List<Book> filteredBooks = books.values().stream()
-                .filter(book -> book.getAuthor().equalsIgnoreCase(author))
-                .toList();
-        return filteredBooks.isEmpty() ? Optional.empty() : Optional.of(filteredBooks);
     }
 
-    public Optional<List<Book>> getBooksByCategory(String category) {
-        List<Book> filteredBooks = books.values().stream()
-                .filter(book -> book.getCategory().equalsIgnoreCase(category))
-                .toList();
-        return filteredBooks.isEmpty() ? Optional.empty() : Optional.of(filteredBooks);
-    }
-    public void addBook(Book book) {
-        if (book == null) {
-            System.out.println("Hata: Geçersiz kitap nesnesi!");
-            return;
-        }
-        books.put(book.getId(), book);
-        System.out.println("Kitap başarıyla eklendi: " + book.getTitle());
+    public Optional<Book> getBookById(long id) {
+        return bookRepository.findById(id);
     }
     public Optional<Book> getBookByTitle(String title) {
-        return books.values().stream()
-                .filter(book -> book.getTitle().equalsIgnoreCase(title))
-                .findFirst();
+        return bookRepository.findByTitle(title);
     }
-
 }
+
+
+
