@@ -3,23 +3,21 @@ package entity;
 import java.util.Set;
 
 public class Librarian extends BaseEntity{
-    private String name;
+    private String fullName;
     private String email;
     private String password;
-    private Responsibility responsibility;
+    private Set<Responsibility> responsibilities;
 
-    public Librarian(String name, String email, String password, Responsibility responsibility) {
-        this.name = name;
+    public Librarian(String fullName, String email, String password, Set<Responsibility> responsibilities) {
+        this.fullName = fullName;
         this.email = email;
         this.password = password;
-        this.responsibility = responsibility;
+        this.responsibilities = responsibilities;
     }
 
-    public Librarian(String admin, Set<Responsibility> collect) {
-    }
 
-    public String getName() {
-        return name;
+    public String getFullName() {
+        return fullName;
     }
 
     public String getEmail() {
@@ -30,7 +28,20 @@ public class Librarian extends BaseEntity{
         return password;
     }
 
-    public Responsibility getResponsibility() {
-        return responsibility;
+    public Set<Responsibility> getResponsibility() {
+        return responsibilities;
+    }
+
+    public boolean hasResponsibility(Responsibility responsibility) {
+        return responsibilities != null && responsibilities.contains(responsibility);
+    }
+
+    @Override
+    public String toString() {
+        return "Librarian{" +
+                "fullName='" + fullName + '\'' +
+                ", email='" + email + '\'' +
+                ", responsibilities=" + responsibilities +
+                '}';
     }
 }

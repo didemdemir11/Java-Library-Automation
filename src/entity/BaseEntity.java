@@ -16,6 +16,10 @@ public abstract class BaseEntity {
         return id;
     }
 
+    public static void setIdCounter(long idCounter) {
+        BaseEntity.idCounter = idCounter;
+    }
+
     public LocalDateTime getCreationTime() {
         return creationTime;
     }

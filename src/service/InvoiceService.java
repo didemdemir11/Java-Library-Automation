@@ -1,29 +1,35 @@
 package service;
 
-import entity.Book;
-import entity.Reader;
 
-import java.util.HashMap;
-import java.util.Map;
+import entity.Invoice;
+import entity.Loan;
+
+import java.time.LocalDate;
+import java.util.Scanner;
 
 public class InvoiceService {
-    private Map<Long, Double> invoices;
-
-    public InvoiceService() {
-        this.invoices = new HashMap<>();
+    public void generateInvoice(Scanner scanner, Loan loan) {
+        LocalDate issueDate = LocalDate.now();
+        double amount = Math.min(loan.getReturnDate().toEpochDay() - loan.getBorrowDate().toEpochDay(), 15) * 5.0;
+        Invoice invoice = new Invoice(loan, amount, issueDate, false);
+        loan.setInvoice(invoice);
+        System.out.println("Fatura kesildi: " + amount + " TL, Tarih: " + issueDate);
     }
 
-    public void generateInvoice(Book book, Reader reader, double amount) {
-        invoices.put(book.getId(), amount);
-        System.out.println(reader.getName() + " için " + book.getTitle() + " kitabı için fatura oluşturuldu. Tutar: " + amount + " TL");
-    }
-
-    public void refundInvoice(Book book, Reader reader) {
-        if (invoices.containsKey(book.getId())) {
-            double amount = invoices.remove(book.getId());
-            System.out.println(reader.getName() + " için " + book.getTitle()+ " kitabının iadesi yapıldı. Geri ödenen tutar: " + amount + " TL");
+    public void refundInvoice(Scanner scanner, Loan loan) {
+        if (loan.getInvoice() == null || loan.getInvoice().isPaid()) {
+            System.out.println("Hata: Fatura zaten ödenmiş veya bulunamadı.");
+            return;
+        }
+        System.out.println("Fatura tutarı: " + loan.getInvoice().getAmount() + " TL");
+        System.out.print("Ödeme iade edilsin mi? (E/H): ");
+        String choice = scanner.nextLine().trim().toUpperCase();
+        if (choice.equals("E")) {
+            loan.getInvoice().markAsPaid();
+            System.out.println("Ödeme iade edildi: " + loan.getInvoice().getAmount() + " TL");
         } else {
-            System.out.println("Bu kitap için fatura bulunamadı.");
+            System.out.println("İade işlemi iptal edildi.");
         }
     }
 }
+

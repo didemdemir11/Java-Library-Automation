@@ -8,13 +8,15 @@ public class Loan extends BaseEntity{
     private LocalDate borrowDate;
     private LocalDate returnDate;
     private boolean returnStatus;
+    private Invoice invoice;
 
-    public Loan(Reader reader, Book book, LocalDate borrowDate, LocalDate returnDate,boolean returnStatus) {
+    public Loan(Reader reader, Book book, LocalDate borrowDate, LocalDate returnDate,boolean returnStatus,Invoice invoice) {
         this.reader = reader;
         this.book = book;
         this.borrowDate = borrowDate;
         this.returnDate = returnDate;
-        this.returnStatus = returnStatus;
+        this.returnStatus = false;
+        this.invoice = null;
     }
 
     public Reader getReader() {
@@ -39,5 +41,12 @@ public class Loan extends BaseEntity{
 
     public void setReturnStatus(boolean returnStatus) {
         this.returnStatus = returnStatus;
+    }
+    public Invoice getInvoice() {
+        return invoice;
+    }
+
+    public void setInvoice(Invoice invoice) {
+        this.invoice = invoice;
     }
 }

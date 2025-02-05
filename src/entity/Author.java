@@ -1,18 +1,20 @@
 package entity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Author extends BaseEntity{
-    private String name;
+    private String authorName;
     private List<Book> books;
 
-    public Author(String name, List<Book> books) {
-        this.name = name;
-        this.books = books;
+    public Author(String authorName) {
+        super();
+        this.authorName = authorName;
+        this.books = new ArrayList<>();
     }
 
-    public String getName() {
-        return name;
+    public String getAuthorName() {
+        return authorName;
     }
 
     public List<Book> getBooks() {
